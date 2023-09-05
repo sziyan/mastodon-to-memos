@@ -1,5 +1,5 @@
 import requests
-import html2text
+from bs4 import BeautifulSoup
 import time
 import logging
 import os
@@ -30,9 +30,8 @@ def get_status(account_id):
     return data
 
 def clean_html(content):
-    h = html2text.HTML2Text()
-    h.ignore_links = True
-    clean_content = h.handle(content)
+    soup = BeautifulSoup(content, 'html.parser')
+    clean_content = soup.get_text('\n')
     return clean_content
 
 def check_latest_status_id(id):
