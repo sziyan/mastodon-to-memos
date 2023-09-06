@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 instance_url = os.environ.get('INSTANCE')
 access_token = os.environ.get('ACCESS')
 memos_url = os.environ.get('MEMOS_URL')
+api = os.environ.get('API')
 
 headers = {'Authorization': 'Bearer {}'.format(access_token)}
 latest_status_id = ''
@@ -44,15 +45,32 @@ def check_latest_status_id(id):
     #return latest_status_id
 
 def write_memos(content):
-    url = memos_url
+    url = '{}/api/v1/memo'.format(memos_url)
+    params = {'openId': api}
     headers = {'Content-Type': 'application/json'}
     json = {'content': content}
-    send_http_request(url, 'POST', header=headers, json=json)
+    r = send_http_request(url, 'POST', headers=headers, json=json, params=params)
+    return r.json().get('id') #return memos id
 
-def send_http_request(url, request_type, header=None, data=None, params=None, json=None):
+def create_bind_resource(memo_id, url):
+    #setting default headers and parameters
+    params = {'openId': api}
+    headers = {'Content-Type': 'application/json'}
+
+    # setting memos resource upload parameters
+    upload_json = {'externalLink': url, 'downloadToLocal': True} # upload resource from external url, and download to local
+    upload_url = '{}/api/v1/resource'.format(memos_url) # api request to upload resource
+    resource_id = requests.post(upload_url, headers=headers, json=upload_json, params=params).json().get('id')
+
+    # setting memos resource to post binding
+    bind_url = '{}/api/v1/memo/{}/resource'.format(memos_url, memo_id) 
+    bind_json = {'resourceId': resource_id}
+    bind = requests.post(bind_url, headers=headers, params=params, json=bind_json) #api request to bind resource to post
+    return bind.json()
+
+def send_http_request(url, request_type, headers=None, data=None, params=None, json=None):
     if request_type == 'POST':
         r = requests.post(url, data=data, headers=headers, params=params, json=json)
-        print(r.json())
     else:
         r = requests.get(url, headers=headers, data=data, params=params, json=json)
     return r
@@ -81,12 +99,19 @@ while True:
             #check if status have mentions
             if check_if_mention(i.get('mentions')) is False:
                 #get the content of the status as there are no mentions
-                content = i.get('content')
-                clean_content = clean_html(content)
-                logging.info(clean_content)
-                write_memos(clean_content)
+                content = i.get('content') 
+                clean_content = clean_html(content) #process it to return text content
+                media_attachments = i.get('media_attachments')
+                memo_id = write_memos(clean_content)
                 print(clean_content)
-                latest_status_id = i.get('id')
+                logging.info(clean_content)
+                if media_attachments:
+                    image_url = media_attachments[0].get('url')
+                    create_bind_resource(memo_id, image_url)
+                    print('Image uploaded')
+                    logging.info('Image uploaded')
+                
+                latest_status_id = i.get('id') #set latest status id to current id
             else:
                 print('Skipping mentions status - {}'.format(i.get('content')))
                 logging.info('Skipping mentions status - {}'.format(i.get('content'))) 
