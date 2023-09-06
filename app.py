@@ -106,11 +106,12 @@ while True:
                 print(clean_content)
                 logging.info(clean_content)
                 if media_attachments:
-                    image_url = media_attachments[0].get('url')
-                    create_bind_resource(memo_id, image_url)
-                    print('Image uploaded')
-                    logging.info('Image uploaded')
-                
+                    for media in media_attachments:
+                        image_url = media.get('url')
+                        create_bind_resource(memo_id, image_url)
+                        print('Image uploaded')
+                    logging.info('Image(s) uploaded')
+                    print('Image(s) uploaded')
                 latest_status_id = i.get('id') #set latest status id to current id
             else:
                 print('Skipping mentions status - {}'.format(i.get('content')))
