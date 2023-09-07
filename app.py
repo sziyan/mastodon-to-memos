@@ -10,6 +10,14 @@ instance_url = os.environ.get('INSTANCE')
 access_token = os.environ.get('ACCESS')
 memos_url = os.environ.get('MEMOS_URL')
 api = os.environ.get('API')
+grist_api = os.environ.get('GRIST_API')
+grist_url = os.environ.get('GRIST_URL')
+grist_workspace = os.environ.get("GRIST_WORKSPACE")
+grist_doc = os.environ.get('GRIST_DOC')
+grist_table = os.environ.get('GRIST_TABLE')
+
+if grist_api is not None:
+    grist_headers = {'Authorization': 'Bearer {}'.format(grist_api), 'Content-Type': 'application/json' }
 
 headers = {'Authorization': 'Bearer {}'.format(access_token)}
 latest_status_id = ''
@@ -35,14 +43,36 @@ def clean_html(content):
     clean_content = soup.get_text('\n')
     return clean_content
 
+def get_grist_record_url():
+    org_id = requests.get('{}/api/orgs/2/workspaces'.format(grist_url), headers=grist_headers).json()[0].get('id') # get id of the first org
+    workspaces = requests.get('{}/api/orgs/{}/workspaces'.format(grist_url,org_id), headers=grist_headers).json() # get all workspaces in the org
+    # get all doc in environment declared workspace name
+    all_docs = next(item for item in workspaces if item["name"] == grist_workspace).get('docs')
+    doc_id = next(item for item in all_docs if item["name"] == grist_doc).get('id') #get the doc_id by searching environment declared doc name
+    record_url = '{}/api/docs/{}/tables/{}/records'.format(grist_url,doc_id, grist_table)
+    return record_url
+
 def check_latest_status_id(id):
-    url = '{}/api/v1/accounts/{}/statuses'.format(instance_url,id)
-    params = {'limit': 1 }
-    r = requests.get(url, headers=headers, params=params)
-    data = r.json()
     global latest_status_id
-    latest_status_id = data[0].get('id')
+    if grist_api is None: #not using GRIST, will use mastodon API
+        url = '{}/api/v1/accounts/{}/statuses'.format(instance_url,id)
+        params = {'limit': 1 }
+        r = requests.get(url, headers=headers, params=params)
+        data = r.json()
+        latest_status_id = data[0].get('id')
+    else: #using GRIST, will search grist table instead
+        record_url = get_grist_record_url()
+        r = requests.get(record_url, headers=grist_headers)
+        latest_status_id = r.json().get('records')[0].get('fields').get('latest_id') # set global variable to the data from grist table
     #return latest_status_id
+
+def set_latest_status_id(id):
+    if grist_api is not None:
+        record_url = get_grist_record_url()
+        json = {'records': [{'id': 1, 'fields': {'latest_id': id}}]}
+        requests.patch(record_url, headers=grist_headers, json=json)
+    global latest_status_id
+    latest_status_id = id
 
 def write_memos(content):
     url = '{}/api/v1/memo'.format(memos_url)
@@ -83,11 +113,17 @@ def check_if_mention(mentions):
         #status have mentions
         return True
 
+def print_log(message):
+    logging.info(message)
+    print(message)
+
+
 logging.info('Bot started')
 print('Bot started')
 
 #setting latest status id on initial run
 check_latest_status_id(get_id())
+print_log('Setting latest_status_id to {}'.format(latest_status_id))
 
 while True:
     try:
@@ -111,8 +147,7 @@ while True:
                         create_bind_resource(memo_id, image_url)
                         print('Image uploaded')
                     logging.info('Image(s) uploaded')
-                    print('Image(s) uploaded')
-                latest_status_id = i.get('id') #set latest status id to current id
+                set_latest_status_id(i.get('id')) #set latest status id to current id
             else:
                 print('Skipping mentions status - {}'.format(i.get('content')))
                 logging.info('Skipping mentions status - {}'.format(i.get('content'))) 
