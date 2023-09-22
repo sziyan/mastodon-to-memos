@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 instance_url = os.environ.get('INSTANCE')
 access_token = os.environ.get('ACCESS')
 memos_url = os.environ.get('MEMOS_URL')
-api = os.environ.get('API')
+api = os.environ.get('API') # memos API
 grist_api = os.environ.get('GRIST_API')
 grist_url = os.environ.get('GRIST_URL')
 grist_workspace = os.environ.get("GRIST_WORKSPACE")
@@ -76,26 +76,26 @@ def set_latest_status_id(id):
 
 def write_memos(content):
     url = '{}/api/v1/memo'.format(memos_url)
-    params = {'openId': api}
-    headers = {'Content-Type': 'application/json'}
+    #params = {'openId': api}
+    headers = {'Content-Type': 'application/json', 'Authorization':'Bearer {}'.format(api)}
     json = {'content': content}
-    r = send_http_request(url, 'POST', headers=headers, json=json, params=params)
+    r = send_http_request(url, 'POST', headers=headers, json=json)
     return r.json().get('id') #return memos id
 
 def create_bind_resource(memo_id, url):
     #setting default headers and parameters
-    params = {'openId': api}
-    headers = {'Content-Type': 'application/json'}
+    #params = {'openId': api}
+    headers = {'Content-Type': 'application/json', 'Authorization':'Bearer {}'.format(api)}
 
     # setting memos resource upload parameters
     upload_json = {'externalLink': url, 'downloadToLocal': True} # upload resource from external url, and download to local
     upload_url = '{}/api/v1/resource'.format(memos_url) # api request to upload resource
-    resource_id = requests.post(upload_url, headers=headers, json=upload_json, params=params).json().get('id')
+    resource_id = requests.post(upload_url, headers=headers, json=upload_json).json().get('id')
 
     # setting memos resource to post binding
     bind_url = '{}/api/v1/memo/{}/resource'.format(memos_url, memo_id) 
     bind_json = {'resourceId': resource_id}
-    bind = requests.post(bind_url, headers=headers, params=params, json=bind_json) #api request to bind resource to post
+    bind = requests.post(bind_url, headers=headers,json=bind_json) #api request to bind resource to post
     return bind.json()
 
 def send_http_request(url, request_type, headers=None, data=None, params=None, json=None):
